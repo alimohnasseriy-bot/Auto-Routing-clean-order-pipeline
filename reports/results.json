@@ -1,0 +1,35 @@
+{
+    "generated_at": "2026-09-01T00:04:24.908048+00:00",
+    "id_run": "50b375f7-1ee2-475e-98c3-1d3e0091aae6",
+    "file_name": "orders_small_sample.csv",
+    "file_size_mb": 41.77,
+    "used_engine": "python_batch",
+    "read_rows": 100000,
+    "loaded_raw": 100000,
+    "count_valid": 52648,
+    "count_corrected": 39986,
+    "count_quarantine": 7366,
+    "seconds_elapsed": 282.36,
+    "throughput": 354.2,
+    "partitions": 1,
+    "size_batch": 5000,
+    "count_inserted": 0,
+    "count_updated": 92634,
+    "count_unchanged": 0,
+    "counts_case_error": {
+        "ID_ORDER_MISSING": 4012,
+        "ID_ORDER_DUPLICATE": 3726,
+        "DATE_IMPOSSIBLE_INVALID": 10546,
+        "JSON_ITEMS_CORRUPTED": 7388,
+        "EMAIL_INVALID": 7398
+    },
+    "consistency_check": "PASS",
+    "db_totals": {
+        "orders_raw": 600000,
+        "orders_validated": 92637,
+        "orders_quarantine": 40757,
+        "valid": 52648,
+        "corrected": 39989
+    },
+    "metrics_query_seconds": 0.5023
+}

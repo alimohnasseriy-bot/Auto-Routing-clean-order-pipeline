@@ -1,0 +1,20 @@
+# Python virtual environment and cache
+venv/
+env/
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+
+# Data files (Do not upload large CSV files to GitHub)
+data/*.csv
+!data/.gitkeep
+data/delta/*.csv
+
+# Logs
+*.log
