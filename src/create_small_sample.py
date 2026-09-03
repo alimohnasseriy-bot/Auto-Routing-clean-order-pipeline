@@ -1,6 +1,11 @@
-﻿import csv
+import csv
+import sys
 import argparse
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from config.settings import SMALL_SAMPLE_ROWS
 
 
 def create_sample(input_file, output_file, rows):
@@ -59,7 +64,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--rows",
         type=int,
-        default=100000,
+        default=SMALL_SAMPLE_ROWS,
         help="Number of data rows to copy"
     )
 

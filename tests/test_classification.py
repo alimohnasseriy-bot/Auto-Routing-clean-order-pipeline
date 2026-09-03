@@ -199,6 +199,22 @@ class TestQuarantinedClassification:
         assert "quarantine_reasons" in processed
         assert "ID_ORDER_MISSING" in processed["quarantine_reasons"]
 
+    def test_missing_customer_id_quarantined(self):
+        record = _valid_record(customer_id="")
+        processed, classification = process_record(record)
+        assert classification == "QUARANTINED"
+        assert "ID_CUSTOMER_MISSING" in processed["quarantine_reasons"]
+
+    def test_multiple_conflicting_errors_quarantined(self):
+        # Trigger 3 independent errors: missing order_id, invalid date, corrupted JSON
+        record = _valid_record(order_id="", order_date="invalid", items_json="not-json")
+        processed, classification = process_record(record)
+        assert classification == "QUARANTINED"
+        assert "ID_ORDER_MISSING" in processed["quarantine_reasons"]
+        assert "DATE_IMPOSSIBLE_INVALID" in processed["quarantine_reasons"]
+        assert "JSON_ITEMS_CORRUPTED" in processed["quarantine_reasons"]
+        assert "ERRORS_CONFLICTING_MULTIPLE" in processed["quarantine_reasons"]
+
 
 # ---------------------------------------------------------------------------
 # Classification is always exactly one of VALID / CORRECTED / QUARANTINED

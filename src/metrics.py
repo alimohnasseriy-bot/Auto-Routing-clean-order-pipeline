@@ -79,6 +79,9 @@ def collect_and_write(
         missing_order_id = quarantine_col.count_documents(
             {"quarantine_reasons": "ID_ORDER_MISSING"}
         )
+        missing_customer_id = quarantine_col.count_documents(
+            {"quarantine_reasons": "ID_CUSTOMER_MISSING"}
+        )
         duplicate_order_id = quarantine_col.count_documents(
             {"quarantine_reasons": "ID_ORDER_DUPLICATE"}
         )
@@ -90,6 +93,9 @@ def collect_and_write(
         )
         invalid_email = quarantine_col.count_documents(
             {"quarantine_reasons": "EMAIL_INVALID"}
+        )
+        conflicting_multiple = quarantine_col.count_documents(
+            {"quarantine_reasons": "ERRORS_CONFLICTING_MULTIPLE"}
         )
 
         query_elapsed = time.perf_counter() - query_start
@@ -129,10 +135,12 @@ def collect_and_write(
             # Quarantine error breakdown
             "counts_case_error": {
                 "ID_ORDER_MISSING": missing_order_id,
+                "ID_CUSTOMER_MISSING": missing_customer_id,
                 "ID_ORDER_DUPLICATE": duplicate_order_id,
                 "DATE_IMPOSSIBLE_INVALID": invalid_date,
                 "JSON_ITEMS_CORRUPTED": corrupted_items,
                 "EMAIL_INVALID": invalid_email,
+                "ERRORS_CONFLICTING_MULTIPLE": conflicting_multiple,
             },
 
             # Consistency equation:

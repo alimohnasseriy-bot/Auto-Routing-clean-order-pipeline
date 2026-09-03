@@ -362,6 +362,22 @@ class TestQuarantineBehavior:
         _, classification = process_record(record)
         assert classification == "QUARANTINED"
 
+    def test_missing_customer_id_quarantined(self):
+        record = {
+            "order_id": "ORD-1",
+            "customer_id": "",
+            "order_date": "2025-01-01T00:00:00",
+            "customer_phone": "739988747",
+            "customer_email": "user@example.com",
+            "delivery_cost": "100.0",
+            "payment_amount": "100.0",
+            "total_amount": "100.0",
+            "items_json": '[{"sku":"S","qty":1,"unit_price":90.0,"total":90.0}]',
+        }
+        _, classification = process_record(record)
+        assert classification == "QUARANTINED"
+
+
     def test_invalid_date_quarantined(self):
         record = {
             "order_id": "ORD-1",

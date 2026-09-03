@@ -1,13 +1,19 @@
+import sys
+from pathlib import Path
+
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, OperationFailure
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from config.settings import MONGODB_URI, MONGODB_DATABASE
 
 # ============================================================
-# MongoDB Configuration
+# MongoDB Configuration (from config.settings)
 # ============================================================
 
-MONGO_URI = "mongodb://localhost:27017/"
-DATABASE_NAME = "midterm_data_pipeline"
+MONGO_URI = MONGODB_URI
+DATABASE_NAME = MONGODB_DATABASE
 
 
 # ============================================================

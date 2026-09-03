@@ -21,13 +21,15 @@ TOTAL_RECALCULATION    — Recalculate total from items + delivery when valid
 
 Quarantine codes
 ----------------
-ID_ORDER_MISSING       — order_id is blank/absent
-DATE_IMPOSSIBLE_INVALID— order_date cannot be parsed to a valid date
-JSON_ITEMS_CORRUPTED   — items_json is not valid JSON
-ITEMS_EMPTY            — items list is empty
-VALUE_NEGATIVE_AMBIGUOUS — item quantity ≤ 0
-PRICE_UNKNOWN          — numeric amount cannot be parsed after all rules
-EMAIL_INVALID          — email cannot be repaired to valid format
+ID_ORDER_MISSING           — order_id is blank/absent
+ID_CUSTOMER_MISSING        — customer_id is blank/absent
+DATE_IMPOSSIBLE_INVALID    — order_date cannot be parsed to a valid date
+JSON_ITEMS_CORRUPTED       — items_json is not valid JSON
+ITEMS_EMPTY                — items list is empty
+VALUE_NEGATIVE_AMBIGUOUS   — item quantity ≤ 0
+PRICE_UNKNOWN              — numeric amount cannot be parsed after all rules
+EMAIL_INVALID              — email cannot be repaired to valid format
+ERRORS_CONFLICTING_MULTIPLE — record has 3+ independent quarantine reasons
 """
 
 import json
@@ -402,6 +404,14 @@ def process_record(record: Dict) -> Tuple[Dict, str]:
         result["id_order"] = raw_order_id
 
     # -----------------------------------------------------------------------
+    # Rule 1b: customer_id check  (ID_CUSTOMER_MISSING)
+    # -----------------------------------------------------------------------
+    raw_customer_id = str(result.get("customer_id", "")).strip()
+
+    if not raw_customer_id:
+        quarantine_reasons.append("ID_CUSTOMER_MISSING")
+
+    # -----------------------------------------------------------------------
     # Rule 2: Date normalization  (DATE_NORMALIZATION)
     # -----------------------------------------------------------------------
     original_date = result.get("order_date")
@@ -542,6 +552,13 @@ def process_record(record: Dict) -> Tuple[Dict, str]:
     # -----------------------------------------------------------------------
     # Classification
     # -----------------------------------------------------------------------
+
+    # Mark records with 3+ independent quarantine reasons as conflicting
+    unique_reasons = list(dict.fromkeys(quarantine_reasons))
+    if len(unique_reasons) >= 3 and "ERRORS_CONFLICTING_MULTIPLE" not in unique_reasons:
+        unique_reasons.append("ERRORS_CONFLICTING_MULTIPLE")
+        quarantine_reasons = unique_reasons
+
     if quarantine_reasons:
         classification = "QUARANTINED"
     elif corrections:
