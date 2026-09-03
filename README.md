@@ -360,11 +360,7 @@ midterm-data-pipeline/
 │   ├── incremental_loader.py    # PATH B incremental loading
 │   ├── metrics.py               # Metrics collection + results.json
 │   ├── mongo_setup.py           # MongoDB collections + indexes
-│   ├── create_small_sample.py   # Sample generator
-│   └── scripts/                 # Experimental / reference scripts (not tests)
-│       ├── run_cluster_test.py
-│       ├── run_mongo_connector_test.py
-│       └── ...
+│   └── create_small_sample.py   # Sample generator
 │
 ├── tests/
 │   ├── test_cleaning_rules.py   # Quality rule unit tests
