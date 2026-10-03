@@ -41,485 +41,96 @@ Routes small files to **Python Batch**, large files to **Apache PySpark**, store
    reports/results.json
 ```
 
-**PATH B — Incremental Loading:**
-```
-Initial load → orders_validated
-     ↓
-Delta CSV   → Version-aware upsert (updated_at)
-     ↓
-Delta replay → All UNCHANGED (idempotent)
-```
-
 ---
 
-## Environment Requirements
+## 🚀 Phase 2 (المشروع النهائي) - API, Aggregations, MVs, & Jobs
 
-| Component | Version |
-|-----------|---------|
-| Python    | 3.11.9  |
-| Apache Spark / PySpark | 4.2.0 |
-| Java      | 17.0.12 |
-| MongoDB shell | 2.9.0 |
-| Operating System | Windows (also works on Linux/macOS) |
+هذا القسم يغطي التحديثات التي تمت لتلبية متطلبات المشروع النهائي (7 درجات).
 
----
-
-## Installation
-
+### 1. الإعداد والتشغيل (Installation & Setup)
+تأكد من تثبيت الحزم المطلوبة وتجهيز البيئة:
 ```bash
-# Clone or extract the project
-cd midterm-data-pipeline
+# نسخ ملف الإعدادات
+cp .env.example .env
 
-# Install Python dependencies
+# تثبيت المكتبات الجديدة (مثل FastAPI و Uvicorn و APScheduler)
 pip install -r requirements.txt
 ```
 
-**requirements.txt contains:**
+### 2. تشغيل واجهة API الموحدة
+تم توفير واجهة API متكاملة لتشغيل واختبار جميع الوظائف دون الحاجة لتشغيل سكربتات يدوية. لتشغيل السيرفر:
+```bash
+python -m uvicorn src.api:app --reload
 ```
-pymongo==4.17.0
-pyspark==4.2.0
-pytest==9.1.1
-python-dotenv>=1.0.0
-```
+👉 **بعد التشغيل، افتح الرابط التالي في المتصفح لتجربة كل شيء (Swagger UI):**  
+**http://127.0.0.1:8000/docs**
+
+### 3. الاستعلامات والفهارس (Queries, Indexes & Explain)
+تم إنشاء 3 فهارس لتسريع البحث:
+- `idx_customer_date` (فهرس مركب: `customer_id` + `order_date`)
+- `idx_status` (فهرس على حالة الطلب)
+- `idx_city` (فهرس على المدينة)
+
+**الاستعلامات الـ 5 المتوفرة (عبر `GET /queries/{name}`):**
+1. `customer_orders`: البحث عن طلبات عميل معين.
+2. `quarantined_by_reason`: البحث عن الطلبات المرفوضة بسبب معين.
+3. `orders_by_city_status`: البحث عن الطلبات في مدينة محددة وحالة محددة.
+4. `top_valuable_orders`: استرجاع أغلى 10 طلبات.
+5. `orders_in_date_range`: البحث ضمن نطاق زمني.
+
+*(ملاحظة: يمكنك إضافة `?explain=true` لأي استعلام في واجهة Swagger لرؤية `executionStats` وإثبات استخدام الفهارس).*
+
+### 4. التجميعات والتقارير (Aggregations)
+يتوفر 5 تقارير تم بناؤها باستخدام `Aggregation Pipeline` (عبر `GET /aggregations/{name}`):
+1. `sales_by_city`: المبيعات مجمعة حسب المدينة.
+2. `top_products`: أفضل المنتجات مبيعاً.
+3. `top_customers`: أفضل العملاء حسب حجم الإنفاق.
+4. `sales_by_date`: إجمالي المبيعات مقسمة يومياً.
+5. `orders_by_status`: توزيع الطلبات بناءً على حالتها.
+
+### 5. العروض المادية (Materialized Views)
+تم بناء عرضين (Views) يتم تحديثهما بآلية **التحديث التزايدي** (Incremental Update) باستخدام معامل `$merge` لتجنب مسح وبناء الجدول من الصفر:
+- `mv_daily_sales_summary`
+- `mv_top_products_summary`
+
+*(يمكنك تحديثهما يدوياً عبر `POST /refresh-mv`).*
+
+### 6. المهام المجدولة (Scheduled Jobs)
+يستخدم النظام `APScheduler` لتشغيل مهام بالخلفية:
+- مهمة تحديث الـ Materialized Views (كل ساعة).
+- مهمة فحص صحة النظام (كل 30 دقيقة).
+
+تقوم هذه المهام بتسجيل وقت البداية، النهاية، والنتيجة داخل جدول `jobs_log` في قاعدة البيانات. (يمكنك تشغيلها يدوياً للتجربة عبر `POST /jobs/{name}/run`).
 
 ---
 
-## MongoDB Setup
+## 🛠️ Phase 1 (المشروع النصفي) - Pipeline Execution
 
-Ensure MongoDB is running locally on port 27017 (default).
-
+### تشغيل مسار معالجة البيانات (Ingestion)
 ```bash
-# Create collections and unique index on orders_validated.id_order
-python -m src.mongo_setup
-```
-
-Expected output:
-```
-[OK] MongoDB connection successful
-[OK] Collection created: orders_raw
-[OK] Collection created: orders_validated
-[OK] Collection created: orders_quarantine
-[OK] Unique index created on orders_validated.id_order
-```
-
----
-
-## Configuration
-
-All configuration lives in [`config/settings.py`](config/settings.py).
-
-| Setting | Default | Environment Variable |
-|---------|---------|---------------------|
-| `SMALL_FILE_THRESHOLD_MB` | `200` | `SMALL_FILE_THRESHOLD_MB` |
-| `BATCH_SIZE` | `5000` | `BATCH_SIZE` |
-| `MONGODB_URI` | `mongodb://localhost:27017` | `MONGODB_URI` |
-| `MONGODB_DATABASE` | `midterm_data_pipeline` | `MONGODB_DATABASE` |
-| `SPARK_MASTER` | `local[*]` | `SPARK_MASTER` |
-| `INPUT_DIR` | `data/` | `INPUT_DIR` |
-| `REPORTS_DIR` | `reports/` | `REPORTS_DIR` |
-
-**Why is the 200 MB threshold configurable?**  
-Different hardware environments have different memory constraints.  On a machine with 8 GB RAM, 200 MB is a safe cutoff that keeps Python Batch responsive.  On servers with 64 GB RAM, you could raise it to 1 GB.  The threshold is in config so it can be tuned without touching any processing code.
-
-**Override an environment variable:**
-```bash
-set SMALL_FILE_THRESHOLD_MB=500
+# معالجة الملف الصغير (Python Batch)
 python -m src.main --input data/orders_small_sample.csv
-```
 
----
-
-## Sample Generation
-
-If you need to regenerate the 100 000-row sample from the 12 GB source:
-
-```bash
-python src/create_small_sample.py \
-    --input data/orders_huge_mixed_quality.csv \
-    --output data/orders_small_sample.csv \
-    --rows 100000
-```
-
-> **Do NOT modify the original 12 GB file.**  The sample is already present at `data/orders_small_sample.csv`.
-
----
-
-## Running the Pipeline
-
-### Small file — Python Batch engine (≤ 200 MB)
-
-```bash
-python -m src.main --input data/orders_small_sample.csv
-```
-
-The router detects the file is ~42 MB → selects **Python Batch**.
-
-### Large file — PySpark engine (> 200 MB)
-
-```bash
+# معالجة الملف الضخم (PySpark)
 python -m src.main --input data/orders_huge_mixed_quality.csv
 ```
 
-The router detects the file is ~12 GB → selects **PySpark** (runs in `local[*]` mode by default).
-
-### Command-line options
-
-```
-python -m src.main [OPTIONS]
-
-  --input PATH         Input CSV file  (default: data/orders_small_sample.csv)
-  --batch-size INT     Records per MongoDB batch insert  (default: 5000)
-  --mongo-uri URI      MongoDB connection string
-  --database NAME      MongoDB database name
-  --setup-only         Only setup MongoDB, then exit
-  --demo-path-b        Run Path B incremental demo after pipeline
-  --skip-pipeline      Skip main pipeline (use with --demo-path-b)
-```
-
----
-
-## Running Tests
-
-```bash
-pytest tests/ -v
-```
-
-All 89 tests should pass.  Tests cover:
-
-- Arabic digit normalization
-- Thousands separator removal
-- Currency text normalization
-- Arabic number words
-- Phone normalization
-- Email repair and rejection
-- Date normalization
-- Items JSON validation
-- Correction audit trail structure
-- VALID / CORRECTED / QUARANTINED classification exclusivity
-- Path B version-comparison logic
-- Deterministic quarantine keys
-
-> Tests are **pure Python** — no MongoDB, no Spark, no network required.
-
----
-
-## Path B — Incremental Loading Demonstration
-
-### Full automated demo (generates delta, applies, replays):
-
+### Path B (التحديث التزايدي للملفات)
 ```bash
 python -m src.main --input data/orders_small_sample.csv --demo-path-b
 ```
 
-### Or run it separately after the main pipeline:
-
+### تشغيل الاختبارات الآلية
 ```bash
-# Step 1: Generate a delta file (5 updates + 3 inserts)
-python -m src.incremental_loader generate \
-    --sample data/orders_small_sample.csv \
-    --output data/delta/delta_001.csv
-
-# Step 2: Apply delta #1
-python -m src.incremental_loader apply --delta data/delta/delta_001.csv
-
-# Step 3: Replay delta #1 (expect all UNCHANGED)
-python -m src.incremental_loader apply --delta data/delta/delta_001.csv
-
-# Step 4: Full demo (all stages in one command)
-python -m src.incremental_loader demo --sample data/orders_small_sample.csv
-```
-
-**Expected demo output:**
-```
-[STAGE 1]  Initial validated count : 86,XXX
-[STAGE 2]  Generating delta file ...
-[STAGE 3]  Applying delta #1 ...
-  Delta #1 result:
-    Inserted  : 3
-    Updated   : 5
-    Unchanged : 0
-[STAGE 4]  Replaying delta #1 (idempotency check) ...
-  Delta #1 REPLAY result:
-    Inserted  : 0  (expected: 0)
-    Updated   : 0  (expected: 0)
-    Unchanged : 8  (expected: all)
-IDEMPOTENCY : PASS
+pytest tests/ -v
 ```
 
 ---
 
-## Idempotency Demonstration
-
-Running the main pipeline twice with the same input must not create duplicate business records:
-
-```bash
-# First run — loads 100,000 records
-python -m src.main --input data/orders_small_sample.csv
-
-# Second run — same input, same data
-python -m src.main --input data/orders_small_sample.csv
-
-# Verify no duplicates in orders_validated
-python -c "
-from pymongo import MongoClient
-db = MongoClient()['midterm_data_pipeline']
-total = db.orders_validated.count_documents({})
-unique = len(db.orders_validated.distinct('id_order'))
-print(f'Total docs: {total}, Unique id_order: {unique}')
-assert total == unique, 'DUPLICATE id_order detected!'
-print('IDEMPOTENCY: PASS')
-"
-```
-
-The second run will report `count_updated` or `count_unchanged` — not `count_inserted` — proving idempotency.
-
----
-
-## Metrics / Reports
-
-After every pipeline run, results are written to:
-
-```
-reports/results.json
-```
-
-**Example results.json:**
-```json
-{
-    "id_run": "3f7a-...",
-    "file_name": "orders_small_sample.csv",
-    "file_size_mb": 41.77,
-    "used_engine": "python_batch",
-    "loaded_raw": 100000,
-    "count_valid": 81000,
-    "count_corrected": 5600,
-    "count_quarantine": 13400,
-    "seconds_elapsed": 42.3,
-    "throughput": 2364,
-    "partitions": 1,
-    "size_batch": 5000,
-    "count_inserted": 86600,
-    "count_updated": 0,
-    "count_unchanged": 0,
-    "consistency_check": "PASS",
-    "counts_case_error": {
-        "ID_ORDER_MISSING": 721,
-        "ID_ORDER_DUPLICATE": 672,
-        "DATE_IMPOSSIBLE_INVALID": 300,
-        "JSON_ITEMS_CORRUPTED": 2000,
-        "EMAIL_INVALID": 500
-    }
-}
-```
-
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| `MongoDB connection refused` | Start MongoDB: `mongod --dbpath <path>` |
-| `UnicodeEncodeError` in terminal | The pipeline handles Arabic UTF-8 internally; the Windows terminal display is cosmetic only |
-| Spark takes too long | Use `--input data/orders_small_sample.csv` during development |
-| `ModuleNotFoundError: src` | Run from the project root: `cd midterm-data-pipeline` then `python -m src.main ...` |
-| `SPARK_MASTER` connection refused | Do not set `SPARK_MASTER` — it defaults to `local[*]` which needs no cluster |
-| Pytest collects src/ scripts | `pytest.ini` restricts collection to `tests/` only — do not run `pytest src/` |
-
----
-
-## Project Structure
-
-```
-midterm-data-pipeline/
-├── config/
-│   ├── __init__.py
-│   └── settings.py              # All configuration
-│
-├── data/
-│   ├── orders_huge_mixed_quality.csv   # 12 GB source (DO NOT MODIFY)
-│   ├── orders_small_sample.csv         # 100K-row sample
-│   └── delta/
-│       └── delta_001.csv               # Generated delta file
-│
-├── docs/
-│   └── architecture.md          # Detailed architecture documentation
-│
-├── reports/
-│   ├── results.json             # Run metrics (generated)
-│   └── results.md               # Human-readable summary
-│
-├── src/
-│   ├── __init__.py
-│   ├── main.py                  # PRIMARY ENTRY POINT
-│   ├── elt_pipeline.py          # ELT orchestration
-│   ├── file_router.py           # Size-based engine routing
-│   ├── batch_loader.py          # Python Batch raw loader
-│   ├── spark_large_loader.py    # PySpark large-file raw loader
-│   ├── quality_rules.py         # 10 deterministic cleaning rules
-│   ├── quality_processor.py     # Raw → Validated/Quarantine
-│   ├── incremental_loader.py    # PATH B incremental loading
-│   ├── metrics.py               # Metrics collection + results.json
-│   ├── mongo_setup.py           # MongoDB collections + indexes
-│   └── create_small_sample.py   # Sample generator
-│
-├── tests/
-│   ├── test_cleaning_rules.py   # Quality rule unit tests
-│   └── test_classification.py  # Classification + Path B tests
-│
-├── conftest.py                  # Pytest sys.path configuration
-├── pytest.ini                   # Pytest settings
-└── requirements.txt             # Python dependencies
-```
-
----
-
-## Design Decisions
-
-### ELT vs ETL
-Raw data is loaded into `orders_raw` **before** any cleaning.  This preserves the original values and provides a complete audit trail.  Cleaning happens as a second stage reading from `orders_raw`.
-
-### Business Key Mapping
-The source CSV uses `order_id`.  The validated collection uses `id_order` as the canonical business key.  This mapping is explicit in the code — `id_order = order_id`.  The original CSV is never modified.
-
-### Python Batch vs PySpark
-- Python Batch: simpler, no JVM overhead, sufficient for files ≤ 200 MB.
-- PySpark: handles 12 GB+ without loading into driver memory.  Runs in `local[*]` mode by default (no cluster required).
-
-### Idempotency
-- `orders_validated`: unique index on `id_order` + `upsert=True` prevents duplicates.
-- `orders_quarantine`: deterministic `quarantine_key = f"{id_run}|{row}|{order_id}"`.
-- Path B: `updated_at` timestamp comparison prevents re-applying stale deltas.
-
-### Why `local[*]` for Spark?
-PATH B is selected, not PATH A.  The project must work without a Spark Standalone cluster.  `local[*]` uses all CPU cores and processes the 12 GB file in distributed partitions without any cluster infrastructure.
-
----
-
-## Collections Schema
-
-### `orders_raw`
-```json
-{
-  "id_run": "uuid",
-  "file_source": "data/orders_small_sample.csv",
-  "number_row_source": 42,
-  "at_ingested": "2025-08-31T10:30:00+00:00",
-  "engine_used": "python_batch",
-  "order_id": "طلب-100003",
-  "record_raw": { ...original CSV fields... },
-  ...original CSV fields spread at top level...
-}
-```
-
-### `orders_validated`
-```json
-{
-  "id_order": "طلب-100003",
-  "order_id": "طلب-100003",
-  "classification": "CORRECTED",
-  "quality_status": "corrected",
-  "corrections": [
-    {
-      "field": "total_amount",
-      "original_value": "٧٠٦٠٠٠٫٠",
-      "corrected_value": "706000.0",
-      "rule_code": "ARABIC_DIGITS"
-    }
-  ],
-  "updated_at": "2025-08-31T10:35:00+00:00",
-  "id_run": "uuid"
-}
-```
-
-### `orders_quarantine`
-```json
-{
-  "quarantine_key": "uuid|42|طلب-100003",
-  "order_id": "طلب-100003",
-  "classification": "QUARANTINED",
-  "quarantine_reasons": ["JSON_ITEMS_CORRUPTED"],
-  "quarantined_at": "2025-08-31T10:35:00+00:00",
-  "id_run": "uuid"
-}
-```
-
- # #   P h a s e   2 :   F a s t A P I ,   A g g r e g a t i o n s ,   &   J o b s 
- R u n   t h e   A P I   w i t h :   u v i c o r n   s r c . a p i : a p p   - - r e l o a d .   A c c e s s   S w a g g e r   a t   h t t p : / / 1 2 7 . 0 . 0 . 1 : 8 0 0 0 / d o c s 
- 
- 
-
----
-
-## Phase 2 (Final Project) — API, Aggregations, MVs, & Jobs
-
-This phase adds advanced querying, background jobs, incremental materialized views, and a unified execution API via **FastAPI** to meet the 7-point requirements for the final evaluation.
-
-### 1. Installation & Environment Setup
-Ensure your .env is setup properly. You can copy the provided example:
-`ash
-cp .env.example .env
-`
-Make sure the new dependencies are installed:
-`ash
-pip install -r requirements.txt
-`
-
-### 2. Running the Unified API (FastAPI)
-The entire Phase 2 system is accessible via a unified API, making testing and grading seamless without running manual scripts.
-
-Start the server:
-`ash
-python -m uvicorn src.api:app --reload
-`
-Open the interactive Swagger UI in your browser:
-👉 **http://127.0.0.1:8000/docs**
-
-### 3. API Endpoints Overview
-- GET /health : Check if the API is running.
-- POST /ingest : Triggers the main pipeline ingestion (from Phase 1).
-- POST /indexes : Creates the required database indexes.
-- GET /queries : Lists available queries.
-- GET /queries/{name} : Executes a specific query or returns its explain stats.
-- GET /aggregations : Lists available aggregations (reports).
-- GET /aggregations/{name} : Executes a specific aggregation pipeline.
-- POST /refresh-mv : Triggers an incremental refresh of Materialized Views.
-- GET /jobs : Lists available background jobs.
-- POST /jobs/{name}/run : Triggers a background job manually.
-
-### 4. Queries, Indexes & Explain
-The project creates 3 indexes (including a compound index) to optimize search operations:
-- idx_customer_date (Compound: customer_id + order_date)
-- idx_status (status)
-- idx_city (city)
-
-**Available Queries:**
-- customer_orders: Find orders by a specific customer.
-- quarantined_by_reason: Filter quarantined orders by specific reason.
-- orders_by_city_status: Filter validated orders by city and status.
-- 	op_valuable_orders: Retrieve the most valuable orders.
-- orders_in_date_range: Filter orders within a date range.
-
-**Testing Explain:**
-You can append ?explain=true to the /queries/{name} endpoint in Swagger to retrieve MongoDB executionStats, demonstrating that the indexes are actively being utilized (Index Scan vs Collection Scan).
-
-### 5. Aggregations (Reports)
-5 distinct aggregation pipelines dynamically compute insights directly from orders_validated:
-1. sales_by_city: Total sales and order counts grouped by city.
-2. 	op_products: Best-selling products by quantity (unwinding the items array).
-3. 	op_customers: Customers grouped by total spending.
-4. sales_by_date: Daily revenue timeline.
-5. orders_by_status: Distribution of orders across statuses (completed, pending, etc.).
-
-### 6. Materialized Views (Incremental Updates)
-We implemented 2 Materialized Views that update **incrementally** using MongoDB's $merge operator, avoiding full rebuilds:
-- mv_daily_sales_summary: Refreshes sales aggregates only for recent days.
-- mv_top_products_summary: Maintains a running total of top products.
-
-*Refresh mechanism:* Trigger POST /refresh-mv to execute the $merge pipeline.
-
-### 7. Scheduled Jobs (APScheduler)
-The project runs background tasks using APScheduler. Jobs log their execution time, status, and details into the jobs_log MongoDB collection.
-- job_refresh_mvs: Runs hourly to update Materialized Views.
-- job_system_health_check: Runs periodically to log system metrics.
-
-You can trigger them manually via the API: POST /jobs/{name}/run.
+## تفاصيل قاعدة البيانات (Collections Schema)
+- `orders_raw`: البيانات الخام قبل التنظيف.
+- `orders_validated`: البيانات السليمة أو التي تم تصحيحها تلقائياً.
+- `orders_quarantine`: البيانات المرفوضة مع توضيح سبب الرفض.
+- `mv_daily_sales_summary`: عرض مادي للمبيعات اليومية.
+- `mv_top_products_summary`: عرض مادي لأفضل المنتجات.
+- `jobs_log`: سجل المهام المجدولة وحالتها.
