@@ -444,5 +444,82 @@ PATH B is selected, not PATH A.  The project must work without a Spark Standalon
 ```
 
  # #   P h a s e   2 :   F a s t A P I ,   A g g r e g a t i o n s ,   &   J o b s 
- R u n   t h e   A P I   w i t h :   u v i c o r n   s r c . a p i : a p p   - - r e l o a d .   A c c e s s   S w a g g e r   a t   h t t p : / / 1 2 7 . 0 . 0 . 1 : 8 0 0 0 / d o c s  
+ R u n   t h e   A P I   w i t h :   u v i c o r n   s r c . a p i : a p p   - - r e l o a d .   A c c e s s   S w a g g e r   a t   h t t p : / / 1 2 7 . 0 . 0 . 1 : 8 0 0 0 / d o c s 
  
+ 
+
+---
+
+## Phase 2 (Final Project) — API, Aggregations, MVs, & Jobs
+
+This phase adds advanced querying, background jobs, incremental materialized views, and a unified execution API via **FastAPI** to meet the 7-point requirements for the final evaluation.
+
+### 1. Installation & Environment Setup
+Ensure your .env is setup properly. You can copy the provided example:
+`ash
+cp .env.example .env
+`
+Make sure the new dependencies are installed:
+`ash
+pip install -r requirements.txt
+`
+
+### 2. Running the Unified API (FastAPI)
+The entire Phase 2 system is accessible via a unified API, making testing and grading seamless without running manual scripts.
+
+Start the server:
+`ash
+python -m uvicorn src.api:app --reload
+`
+Open the interactive Swagger UI in your browser:
+👉 **http://127.0.0.1:8000/docs**
+
+### 3. API Endpoints Overview
+- GET /health : Check if the API is running.
+- POST /ingest : Triggers the main pipeline ingestion (from Phase 1).
+- POST /indexes : Creates the required database indexes.
+- GET /queries : Lists available queries.
+- GET /queries/{name} : Executes a specific query or returns its explain stats.
+- GET /aggregations : Lists available aggregations (reports).
+- GET /aggregations/{name} : Executes a specific aggregation pipeline.
+- POST /refresh-mv : Triggers an incremental refresh of Materialized Views.
+- GET /jobs : Lists available background jobs.
+- POST /jobs/{name}/run : Triggers a background job manually.
+
+### 4. Queries, Indexes & Explain
+The project creates 3 indexes (including a compound index) to optimize search operations:
+- idx_customer_date (Compound: customer_id + order_date)
+- idx_status (status)
+- idx_city (city)
+
+**Available Queries:**
+- customer_orders: Find orders by a specific customer.
+- quarantined_by_reason: Filter quarantined orders by specific reason.
+- orders_by_city_status: Filter validated orders by city and status.
+- 	op_valuable_orders: Retrieve the most valuable orders.
+- orders_in_date_range: Filter orders within a date range.
+
+**Testing Explain:**
+You can append ?explain=true to the /queries/{name} endpoint in Swagger to retrieve MongoDB executionStats, demonstrating that the indexes are actively being utilized (Index Scan vs Collection Scan).
+
+### 5. Aggregations (Reports)
+5 distinct aggregation pipelines dynamically compute insights directly from orders_validated:
+1. sales_by_city: Total sales and order counts grouped by city.
+2. 	op_products: Best-selling products by quantity (unwinding the items array).
+3. 	op_customers: Customers grouped by total spending.
+4. sales_by_date: Daily revenue timeline.
+5. orders_by_status: Distribution of orders across statuses (completed, pending, etc.).
+
+### 6. Materialized Views (Incremental Updates)
+We implemented 2 Materialized Views that update **incrementally** using MongoDB's $merge operator, avoiding full rebuilds:
+- mv_daily_sales_summary: Refreshes sales aggregates only for recent days.
+- mv_top_products_summary: Maintains a running total of top products.
+
+*Refresh mechanism:* Trigger POST /refresh-mv to execute the $merge pipeline.
+
+### 7. Scheduled Jobs (APScheduler)
+The project runs background tasks using APScheduler. Jobs log their execution time, status, and details into the jobs_log MongoDB collection.
+- job_refresh_mvs: Runs hourly to update Materialized Views.
+- job_system_health_check: Runs periodically to log system metrics.
+
+You can trigger them manually via the API: POST /jobs/{name}/run.
