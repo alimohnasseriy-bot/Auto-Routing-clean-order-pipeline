@@ -442,3 +442,7 @@ PATH B is selected, not PATH A.  The project must work without a Spark Standalon
   "id_run": "uuid"
 }
 ```
+
+ # #   P h a s e   2 :   F a s t A P I ,   A g g r e g a t i o n s ,   &   J o b s 
+ R u n   t h e   A P I   w i t h :   u v i c o r n   s r c . a p i : a p p   - - r e l o a d .   A c c e s s   S w a g g e r   a t   h t t p : / / 1 2 7 . 0 . 0 . 1 : 8 0 0 0 / d o c s  
+ 
