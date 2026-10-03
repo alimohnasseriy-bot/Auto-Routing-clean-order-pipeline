@@ -80,7 +80,7 @@ def aggregate_sales_by_city() -> List[Dict]:
     pipeline = [
         {"$group": {
             "_id": "$city",
-            "total_sales": {"$sum": {"$toDouble": "$total_amount"}},
+            "total_sales": {"$sum": {"$convert": {"input": "$total_amount", "to": "double", "onError": 0, "onNull": 0}}},
             "order_count": {"$sum": 1}
         }},
         {"$sort": {"total_sales": DESCENDING}}
@@ -93,8 +93,8 @@ def aggregate_top_products(limit: int = 10) -> List[Dict]:
     pipeline = [
         {"$unwind": "$items_json"},
         {"$group": {
-            "_id": "$items_json.product_name",
-            "total_quantity": {"$sum": {"$toDouble": "$items_json.quantity"}},
+            "_id": "$items_json.name",
+            "total_quantity": {"$sum": {"$convert": {"input": "$items_json.qty", "to": "double", "onError": 0, "onNull": 0}}},
             "order_count": {"$sum": 1}
         }},
         {"$sort": {"total_quantity": DESCENDING}},
@@ -109,7 +109,7 @@ def aggregate_top_customers(limit: int = 10) -> List[Dict]:
         {"$group": {
             "_id": "$customer_id",
             "customer_name": {"$first": "$customer_name"},
-            "total_spent": {"$sum": {"$toDouble": "$total_amount"}},
+            "total_spent": {"$sum": {"$convert": {"input": "$total_amount", "to": "double", "onError": 0, "onNull": 0}}},
             "order_count": {"$sum": 1}
         }},
         {"$sort": {"total_spent": DESCENDING}},
@@ -123,7 +123,7 @@ def aggregate_sales_by_date() -> List[Dict]:
     pipeline = [
         {"$group": {
             "_id": {"$substr": ["$order_date", 0, 10]}, # group by YYYY-MM-DD
-            "daily_revenue": {"$sum": {"$toDouble": "$total_amount"}},
+            "daily_revenue": {"$sum": {"$convert": {"input": "$total_amount", "to": "double", "onError": 0, "onNull": 0}}},
             "order_count": {"$sum": 1}
         }},
         {"$sort": {"_id": ASCENDING}}

@@ -12,7 +12,7 @@ def get_db():
     client = MongoClient(MONGODB_URI)
     return client[MONGODB_DATABASE]
 
-def refresh_daily_sales_mv(days_back: int = 2) -> dict:
+def refresh_daily_sales_mv(days_back: int = 60) -> dict:
     """
     Refresh the 'mv_daily_sales_summary' materialized view.
     Instead of rebuilding the entire history, we only recalculate the last 'days_back' days
@@ -29,7 +29,7 @@ def refresh_daily_sales_mv(days_back: int = 2) -> dict:
         # 2. Group by date
         {"$group": {
             "_id": {"$substr": ["$order_date", 0, 10]}, # YYYY-MM-DD
-            "daily_revenue": {"$sum": {"$toDouble": "$total_amount"}},
+            "daily_revenue": {"$sum": {"$convert": {"input": "$total_amount", "to": "double", "onError": 0, "onNull": 0}}},
             "order_count": {"$sum": 1}
         }},
         # 3. Merge into materialized view collection
@@ -54,11 +54,11 @@ def refresh_top_products_mv() -> dict:
     pipeline = [
         {"$unwind": "$items_json"},
         {"$match": {
-            "items_json.product_name": {"$type": "string"}
+            "items_json.name": {"$type": "string"}
         }},
         {"$group": {
-            "_id": "$items_json.product_name",
-            "total_quantity": {"$sum": {"$toDouble": "$items_json.quantity"}},
+            "_id": "$items_json.name",
+            "total_quantity": {"$sum": {"$convert": {"input": "$items_json.qty", "to": "double", "onError": 0, "onNull": 0}}},
             "order_count": {"$sum": 1}
         }},
         {"$merge": {
